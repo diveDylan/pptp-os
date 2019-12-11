@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title></title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+      ul, li {
+        list-style: none;
+      }
+      
+      li {
+        height: 40px;
+        margin: 10px
+      }
+      li label {
+        display: inline-block;
+        width: 120px;
+        height: 35px;
+        line-height: 35px;
+        margin-left: 15px;
+      }
+      li input {
+        width: 200px;
+        height: 35px;
+        line-height: 35px;
+        border-radius: 6px;
+        border: 1px solid #eeeeee
+      }
+      button {
+        width: 100px;
+        height: 35px;
+        line-height: 35px;
+        border-radius: 6px;
+        margin-left: 20px;
+        color: #fff;
+        font-size: 14px;
+      }
+      .active {
+        background: #5cb87a;
+      }
+      .off {
+        background: #c0c4cc;
+      }
+      .save {
+        color: #030303
+      }
+      .kill-all {
+        color: #030303;
+        margin-top: 10px;
+      }
+      .view-log {
+        color: #030303;
+        margin-top: 10px;
+        display: none;
+      }
+      .log {
+        font-size: 12px;
+        width: 100%;
+        height: 100px;
+        overflow: scroll;
+        margin-top: 15px;
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+        <ul>
+          <button class="kill-all">killAll</button>
+          <button class="view-log">
+            查看日志
+          </button>
+          <!-- <select name="vpn-list"></select> -->
+          <li>
+            <label>vpn名称</label>
+            <input type="text" name="vpn">
+          </li>
+          <li>
+            <label>vpn地址</label>
+            <input type="text" name="address">
+          </li>
+          <li>
+            <label>用户名</label>
+            <input type="text" name="username">
+          </li>
+          <li>
+            <label>密码</label>
+            <input type="text" name="password">
+          </li>
+          <li>
+            <label>管理员密码</label>
+            <input type="text" name="rootpassword">
+          </li>
+          <button class="active switch">
+            连接
+          </button>
+       
+          <!-- <button class="save">
+            保存
+          </button> -->
+        </ul>
+    
+    </div>
+      
+  </body>
+
+  <script>
+    const { ipcRenderer } = require('electron')
+    const iptList = Array.from(document.querySelectorAll('input'))
+    
+    // const selectList = document.querySelector('select')
+    // selectList.onchange = (e) => {
+    //   console.log(e)
+    //   ipcRenderer.send('find-pptp', e.target.value)
+    //   ipcRenderer.on('pptp-detail', (event, arg) => {
+    //     iptList.map(i => {
+    //         i.value = arg[i.name]
+    //     })
+    //   })
+    // }
+    // ipcRenderer.on('add-vpn', (event, arg) => {
+    //   addVpn(arg)
+    // })
+    // function addVpn(vpn) {
+    //   console.log('add ', vpn)
+    //   const opt = document.createElement('option')
+    //   opt.value = vpn
+    //   opt.innerText = vpn
+    //   selectList.appendChild(opt)
+    // }
+    function init() {
+      ipcRenderer.send('fetch-setting')
+      ipcRenderer.on('get-setting', (event, arg) => {
+        console.log(arg)
+        if (arg.default.vpn) {
+          iptList.map(i => {
+            i.value = arg.default[i.name]
+          })
+          // addVpn(arg.default.vpn)
+        }
+        // if (arg.vpnList.length) {
+        //   arg.vpnList.map(i => {
+        //     addVpn(i.vpn)
+        //   })
+        // }
+      })
+      
+    }
+    init()
+
+    const btnSwitch = document.querySelector('.switch')
+    const btnSave = document.querySelector('.save')
+    const vpn = document.querySelector('input[name=vpn]')
+    const btnLog = document.querySelector('.view-log')
+    btnLog.onclick = () => {
+      if (vpn.value) ipcRenderer.send('view-log', vpn.value)
+    }
+  
+    function btnHandler(e, cb) {
+      e.target.disabled  = true
+      const params = {}
+      let allFilled = true
+      iptList.map(i => {
+        if (!i.value) allFilled = false
+        params[i.name] = i.value
+      })
+      if (allFilled) {
+        cb(params)
+        return
+      }else {
+        alert('请配置vpn')
+      }
+      return
+    }
+    ipcRenderer.on('pptp-reply', (event, arg) => {
+      console.log('get-reply', arg)
+      // if (arg.code !== '00') alert(arg.message)
+        btnSwitch.innerText = arg.code === '00' ? '断开' : '连接'
+        btnSwitch.disabled = false
+    })
+    btnSwitch.onclick = (e) => {
+      console.log('connect...')
+      btnHandler(e, (params) => {
+        params.type = btnSwitch.innerText === '连接' ? 'active' : 'kill'
+        params.text = btnSwitch.innerText
+        btnSwitch.innerText = 'connect...'
+        console.log('send...')
+        ipcRenderer.send('switch-pptp', params)
+      })
+    }
+    // btnSave.onclick = (e) => {
+    //   btnHandler(e, (params) => {
+
+    //   })
+    // }
+
+
+    // btn kill all
+
+    const btnKillAll = document.querySelector('.kill-all')
+    const password = document.querySelector('input[name=rootpassword]')
+   
+    btnKillAll.onclick= (e) => {
+      if (!password.value) {
+        alert('请输入管理员密码')
+        return;
+      }
+      btnKillAll.disabled = true
+      ipcRenderer.send('kill-all', password.value)
+    
+    }
+    ipcRenderer.on('reply-kill-all', (event, arg) => {
+        console.log('killaaa', arg)
+        btnKillAll.disabled = false
+        alert(arg.message)
+      })
+  </script>
+</html>
